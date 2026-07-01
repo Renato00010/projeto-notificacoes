@@ -3,8 +3,9 @@ echo ===================================================
 echo  Unilabs Notification Center - Arranque
 echo ===================================================
 
-set JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot
-set PATH=%JAVA_HOME%\bin;C:\maven\apache-maven-3.9.16\bin;%PATH%
+set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"
+set "MVN_HOME=C:\maven\apache-maven-3.9.16"
+set "PATH=%JAVA_HOME%\bin;%MVN_HOME%\bin;%PATH%"
 
 echo.
 echo [1/3] A verificar infraestrutura Docker...
@@ -12,17 +13,17 @@ docker compose up -d
 echo.
 
 echo [2/3] A instalar modulo shared...
-call mvn -pl shared install -q
+call "%MVN_HOME%\bin\mvn.cmd" -pl shared install -q
 echo.
 
 echo [3/3] A iniciar Backend (porta 8080)...
-start "Backend - Porta 8080" cmd /k "cd /d %~dp0 && set JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot && set PATH=%%JAVA_HOME%%\bin;C:\maven\apache-maven-3.9.16\bin;%%PATH%% && mvn -pl backend spring-boot:run"
+start "Backend - Porta 8080" cmd /k "set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot" && set "PATH=C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot\bin;C:\maven\apache-maven-3.9.16\bin;%PATH%" && cd /d "%~dp0" && C:\maven\apache-maven-3.9.16\bin\mvn.cmd -pl backend spring-boot:run"
 
 echo A aguardar arranque do backend (30 segundos)...
 timeout /t 30 /nobreak > nul
 
 echo A iniciar Portal Vaadin (porta 8082)...
-start "Portal - Porta 8082" cmd /k "cd /d %~dp0 && set JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot && set PATH=%%JAVA_HOME%%\bin;C:\maven\apache-maven-3.9.16\bin;%%PATH%% && mvn -pl portal compile spring-boot:run"
+start "Portal - Porta 8082" cmd /k "set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot" && set "PATH=C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot\bin;C:\maven\apache-maven-3.9.16\bin;%PATH%" && cd /d "%~dp0" && C:\maven\apache-maven-3.9.16\bin\mvn.cmd -pl portal compile spring-boot:run"
 
 echo.
 echo ===================================================

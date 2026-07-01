@@ -9,7 +9,13 @@
 .DS_Store
 *.log
 
+# Secrets
+backend/src/main/resources/firebase-service-account.json
+
 # The following files are generated/updated by vaadin-maven-plugin
 **/node_modules/
-src/main/frontend/generated/
+**/generated/
 vite.generated.ts
+
+backend/src/main/resources/firebase-service-account.json
+
