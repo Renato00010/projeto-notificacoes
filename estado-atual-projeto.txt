@@ -1,0 +1,350 @@
+ESTADO ATUAL DO PROJETO - SISTEMA DE NOTIFICACOES UNILABS
+Data da verificacao: 2026-06-09
+Ultima atualizacao tecnica: 2026-06-09
+
+1. RESUMO
+
+O projeto esta atualmente implementado como uma unica aplicacao Spring Boot,
+contendo a interface Vaadin, a API REST e os consumers RabbitMQ no mesmo
+processo.
+
+A visao final continua a poder evoluir para duas apps separadas:
+- App 1: worker/backend de processamento
+- App 2: portal de gestao Vaadin
+
+No estado atual, as responsabilidades existem dentro da mesma aplicacao Java.
+
+
+2. TECNOLOGIAS E VERSOES
+
+- Java: 21
+- Spring Boot: 4.0.6
+- Vaadin: 25.1.6
+- PostgreSQL: postgres:15-alpine
+- RabbitMQ: rabbitmq:3-management-alpine
+- Build: Maven Wrapper
+
+O projeto compila com sucesso usando:
+.\mvnw.cmd -q -DskipTests compile
+
+
+3. PORTAS ATUAIS
+
+Aplicacao Spring Boot / Vaadin / API REST:
+- Porta: 8080
+- Configuracao: server.port=${PORT:8080}
+- URL local esperada: http://localhost:8080
+
+PostgreSQL:
+- Porta interna do container: 5432
+- Porta exposta no host: 5433
+- Mapping Docker atual: 5433:5432
+- URL usada pela aplicacao:
+  jdbc:postgresql://localhost:5433/notification_db
+
+RabbitMQ:
+- Porta AMQP: 5672
+- Porta Management UI: 15672
+- URL do painel: http://localhost:15672
+- User: guest
+- Password: guest
+
+Nota importante:
+A porta antiga 5432 para PostgreSQL ja nao esta correta para acesso a partir
+do host. A porta atual no host e 5433.
+
+
+4. DOCKER
+
+Servicos definidos no docker-compose.yml:
+
+postgres-db:
+- Container: unilabs-postgres
+- Image: postgres:15-alpine
+- DB: notification_db
+- User: admin
+- Password: admin_password123
+- Portas: 5433:5432
+
+rabbitmq:
+- Container: unilabs-rmq
+- Image: rabbitmq:3-management-alpine
+- User: guest
+- Password: guest
+- Portas:
+  - 5672:5672
+  - 15672:15672
+
+Estado observado:
+- unilabs-postgres ativo
+- unilabs-rmq ativo
+- aplicacao Java ativa na porta 8080, mas iniciada antes das ultimas alteracoes
+
+
+5. RABBITMQ
+
+Exchange:
+- notification.exchange
+- Tipo: DirectExchange
+
+Filas suportadas no codigo:
+- notification.queue.email
+- notification.queue.sms
+- notification.queue.push
+
+Routing keys suportadas no codigo:
+- EMAIL: notification.routing.email
+- SMS: notification.routing.sms
+- PUSH: notification.routing.push
+
+Bindings:
+- notification.exchange -> notification.queue.email com notification.routing.email
+- notification.exchange -> notification.queue.sms com notification.routing.sms
+- notification.exchange -> notification.queue.push com notification.routing.push
+
+Nota:
+A fila Push e o binding Push serao criados pelo RabbitMQ quando a aplicacao for
+reiniciada com a versao atual do codigo.
+
+Estado observado antes do restart:
+- notification.queue.sms: 0 mensagens
+- notification.queue.email: 2 mensagens unacknowledged
+- ambas tinham 1 consumer ligado
+
+
+6. BASE DE DADOS
+
+Tabelas observadas:
+- notification_jobs
+- notification_logs
+
+notification_jobs:
+- Tabela normal
+- Guarda o pedido inicial com estado PENDING
+- Antes das correcoes existiam 2 jobs em PENDING
+
+notification_logs:
+- Tabela particionada
+- Particionada por RANGE(created_at)
+- Campo payload e do tipo jsonb
+- Primary key observada: (id, created_at)
+
+Particoes criadas em 2026-06-09:
+- notification_logs_2026_06
+- notification_logs_2026_07
+
+Tambem foi adicionado ao codigo o componente:
+- src/main/java/com/unilabs/config/NotificationLogPartitionManager.java
+
+Esse componente cria automaticamente, no arranque da aplicacao, a particao do
+mes atual e a do mes seguinte.
+
+
+7. FLUXO ATUAL DO CODIGO
+
+1. O utilizador submete uma notificacao pelo Vaadin ou pela API REST.
+2. NotificationService cria um NotificationJob com status PENDING.
+3. O job e gravado na tabela notification_jobs.
+4. O jobId real e colocado dentro do NotificationRequest.
+5. O pedido e enviado para RabbitMQ.
+6. RabbitMQ encaminha a mensagem para EMAIL, SMS ou PUSH.
+7. NotificationConsumer processa a mensagem.
+8. O consumer simula o envio com delay de 500ms.
+9. O consumer grava NotificationLog com o jobId original.
+10. O consumer atualiza NotificationJob para SUCCESS ou FAILED.
+11. Se existir callbackUrl, o sistema envia um callback HTTP assincrono.
+
+Nota:
+Este fluxo atualizado ja esta no codigo, mas a aplicacao que estava a correr na
+porta 8080 foi iniciada antes das alteracoes. Para testar o novo comportamento,
+e necessario reiniciar a aplicacao.
+
+
+8. API REST
+
+Endpoint para criar notificacao:
+POST /api/v1/notifications
+
+Exemplo de JSON:
+
+{
+  "clientId": "cliente-1",
+  "channelType": "EMAIL",
+  "recipient": "teste@exemplo.com",
+  "templateName": "template_teste",
+  "parameters": {
+    "texto_mensagem": "Mensagem de teste"
+  },
+  "callbackUrl": "https://sistema-origem.exemplo.com/webhook"
+}
+
+Resposta esperada:
+
+{
+  "jobId": "uuid-gerado",
+  "status": "PENDING"
+}
+
+Endpoint para consultar estado:
+GET /api/v1/notifications/{jobId}
+
+
+9. CALLBACK / WEBHOOK
+
+Foi adicionado suporte inicial a callbackUrl.
+
+Quando o consumer termina o processamento, envia um HTTP POST assincrono para a
+callbackUrl, se esta existir.
+
+Payload enviado no callback:
+- jobId
+- status
+- channelType
+- recipient
+- errorMessage
+
+
+10. DIFERENCAS FACE A ESPECIFICACAO ORIGINAL
+
+1. Duas apps separadas
+Estado atual:
+- Ainda nao existem duas apps separadas.
+- Existe uma unica aplicacao Spring Boot com Vaadin, API REST e consumers.
+
+2. Atualizacao de status para SUCCESS/FAILED
+Estado atual:
+- Implementado no codigo.
+- Precisa de restart da aplicacao para entrar em runtime.
+
+3. Relacao entre job e log
+Estado atual:
+- Implementado no codigo.
+- O NotificationService gera o jobId.
+- O jobId e enviado na mensagem RabbitMQ.
+- O NotificationConsumer usa esse jobId no NotificationLog.
+
+4. Logs particionados
+Estado atual:
+- Corrigido para junho e julho de 2026.
+- Adicionado gestor automatico de particoes no arranque.
+
+5. API REST, Push e Callback
+Estado atual:
+- API REST adicionada.
+- Canal Push adicionado.
+- callbackUrl adicionado ao contrato e processado no consumer.
+
+
+11. FICHEIROS IMPORTANTES
+
+Configuracao:
+- docker-compose.yml
+- src/main/resources/application.properties
+- pom.xml
+- src/main/java/com/unilabs/config/RabbitMQConfig.java
+- src/main/java/com/unilabs/config/NotificationLogPartitionManager.java
+
+API REST:
+- src/main/java/com/unilabs/controller/NotificationController.java
+
+Servico:
+- src/main/java/com/unilabs/service/NotificationService.java
+- src/main/java/com/unilabs/service/CallbackService.java
+
+Consumer:
+- src/main/java/com/unilabs/consumer/NotificationConsumer.java
+
+Interface Vaadin:
+- src/main/java/com/unilabs/view/NotificationView.java
+
+Dominio:
+- src/main/java/com/unilabs/domain/NotificationJob.java
+- src/main/java/com/unilabs/domain/NotificationLog.java
+- src/main/java/com/unilabs/domain/NotificationLogId.java
+
+DTOs:
+- src/main/java/com/unilabs/dto/NotificationRequest.java
+- src/main/java/com/unilabs/dto/NotificationStatusResponse.java
+
+Repositories:
+- src/main/java/com/unilabs/repository/NotificationJobRepository.java
+- src/main/java/com/unilabs/repository/NotificationLogRepository.java
+
+
+12. PROXIMOS PASSOS
+
+Prioridade imediata:
+
+1. Reiniciar a aplicacao Spring Boot.
+   Motivo: o processo atual na porta 8080 foi iniciado antes das alteracoes.
+
+2. Confirmar no RabbitMQ que a fila notification.queue.push foi criada.
+
+3. Testar Email, SMS e Push pelo Vaadin.
+
+4. Testar POST /api/v1/notifications.
+
+5. Confirmar que:
+   - o job nasce como PENDING
+   - a mensagem entra na fila correta
+   - o log e gravado em notification_logs_2026_06
+   - o job passa para SUCCESS ou FAILED
+   - o callback e disparado quando callbackUrl e informado
+
+Prioridade seguinte:
+
+6. Melhorar tratamento de erros da API REST.
+
+7. Persistir resultado dos callbacks, caso seja necessario auditar falhas de
+   webhook.
+
+8. Criar testes automatizados para NotificationService, NotificationConsumer e
+   NotificationController.
+
+9. Decidir se a arquitetura final sera uma app unica ou duas apps separadas:
+   - worker/backend
+   - portal Vaadin
+
+10. Atualizar o README com:
+    - objetivo do projeto
+    - portas atuais
+    - comandos de arranque
+    - endpoints REST
+    - filas RabbitMQ
+    - notas sobre particionamento PostgreSQL
+
+11. Melhorar a interface Vaadin para mostrar tambem:
+    - jobs
+    - status PENDING/SUCCESS/FAILED
+    - logs associados ao job
+    - filtros por canal e data
+
+
+13. COMANDOS UTEIS
+
+Subir infraestrutura:
+docker compose up -d
+
+Ver contentores:
+docker compose ps
+
+Compilar:
+.\mvnw.cmd -q -DskipTests compile
+
+Arrancar aplicacao:
+.\mvnw.cmd
+
+Aceder ao portal:
+http://localhost:8080
+
+Aceder ao RabbitMQ Management:
+http://localhost:15672
+
+Consultar filas RabbitMQ:
+docker exec unilabs-rmq rabbitmqctl list_queues name messages_ready messages_unacknowledged consumers
+
+Consultar tabelas PostgreSQL:
+docker exec unilabs-postgres psql -U admin -d notification_db -c "\dt+"
+
+Ver estrutura da tabela de logs:
+docker exec unilabs-postgres psql -U admin -d notification_db -c "\d+ notification_logs"

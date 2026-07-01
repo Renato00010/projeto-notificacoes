@@ -1,0 +1,9 @@
+{
+  "clientId": "sistema-exemplo",
+  "channelType": "EMAIL",
+  "recipient": "paciente@exemplo.com",
+  "templateName": "template_teste",
+  "parameters": {
+    "texto_mensagem": "Teste de integracao"
+  }
+}

@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: unilabs-postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin_password123
+      POSTGRES_DB: notification_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - notification-network
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: unilabs-rmq
+    ports:
+      - "5672:5672"   
+      - "15672:15672" 
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - notification-network
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  notification-network:
+    driver: bridge

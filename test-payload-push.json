@@ -1,0 +1,11 @@
+{
+  "clientId": "app-mobile",
+  "channelType": "PUSH",
+  "recipient": "fcm-token-exemplo-abc123",
+  "templateName": "template_resultado_disponivel",
+  "parameters": {
+    "titulo": "Resultado disponível",
+    "corpo": "O seu exame já pode ser consultado."
+  },
+  "callbackUrl": "https://httpbin.org/post"
+}

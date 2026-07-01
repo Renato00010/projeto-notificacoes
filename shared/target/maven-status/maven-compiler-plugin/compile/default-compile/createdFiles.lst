@@ -1,0 +1,16 @@
+com\unilabs\dto\NotificationRequest.class
+com\unilabs\dto\NotificationStatusResponse.class
+com\unilabs\domain\NotificationTemplate.class
+com\unilabs\repository\NotificationTemplateRepository.class
+com\unilabs\dto\NotificationFilterResponse.class
+com\unilabs\repository\NotificationLogRepository.class
+com\unilabs\domain\NotificationLog.class
+com\unilabs\dto\NotificationRetryResponse.class
+com\unilabs\dto\NotificationStatsResponse.class
+com\unilabs\dto\ChannelType.class
+com\unilabs\dto\NotificationTemplateResponse.class
+com\unilabs\domain\NotificationLogId.class
+com\unilabs\dto\NotificationCreateResponse.class
+com\unilabs\dto\NotificationCountResponse.class
+com\unilabs\domain\NotificationJob.class
+com\unilabs\repository\NotificationJobRepository.class

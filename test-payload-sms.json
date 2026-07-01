@@ -1,0 +1,11 @@
+{
+  "clientId": "sistema-exemplo",
+  "channelType": "SMS",
+  "recipient": "+351912345678",
+  "templateName": "template_lembrete_consulta",
+  "parameters": {
+    "data_consulta": "2026-06-20",
+    "hora_consulta": "10:30"
+  },
+  "callbackUrl": "https://httpbin.org/post"
+}

@@ -1,0 +1,204 @@
+OBJETIVO DO PROJETO - NOTIFICATION CENTER UNILABS
+
+1. OBJETIVO GERAL
+
+O objetivo do Notification Center e ser a plataforma unica e agnostica de
+comunicacoes da empresa.
+
+O sistema deve permitir que qualquer aplicacao interna ou externa solicite o
+envio de notificacoes atraves de uma API REST segura ou atraves de uma
+interface administrativa Vaadin.
+
+O Notification Center deve receber os pedidos, guardar o estado inicial,
+encaminhar a mensagem para o canal correto, processar o envio de forma
+assincrona e registar o resultado final em base de dados.
+
+
+2. CANAIS SUPORTADOS
+
+O sistema foi pensado para suportar tres canais principais:
+
+- E-mail
+- SMS
+- Push Notifications
+
+Cada canal deve ter a sua propria fila RabbitMQ e o seu proprio consumer,
+permitindo processamento independente e escalavel.
+
+
+3. IDEIA CENTRAL DA ARQUITETURA
+
+O fluxo principal pretendido e:
+
+1. Um sistema externo ou a interface Vaadin submete um pedido de notificacao.
+2. A API REST recebe o pedido HTTP POST com os dados da notificacao.
+3. O sistema cria um job com estado inicial PENDING.
+4. O pedido e enviado para uma Direct Exchange no RabbitMQ.
+5. O RabbitMQ faz a triagem por canal usando routing keys.
+6. A mensagem e encaminhada para a fila correta:
+   - notification.queue.email
+   - notification.queue.sms
+   - notification.queue.push
+7. O worker correspondente processa a notificacao.
+8. O resultado final e guardado no PostgreSQL.
+9. O estado do job e atualizado para SUCCESS ou FAILED.
+10. Quando existir callbackUrl, o sistema envia um callback HTTP para avisar
+    o sistema que originou o pedido.
+
+
+4. COMPONENTES PRINCIPAIS
+
+A. API REST
+
+A API REST sera a porta de entrada principal para sistemas externos.
+
+Exemplo de endpoint pretendido:
+
+/api/v1/notifications
+
+Esta API deve receber pedidos JSON com os dados da notificacao, incluindo:
+
+- cliente ou sistema de origem
+- canal pretendido
+- destinatario
+- template
+- parametros dinamicos
+- callbackUrl opcional
+
+
+B. Interface Vaadin
+
+A interface Vaadin serve como portal de gestao e testes.
+
+Ela deve permitir:
+
+- criar notificacoes manualmente
+- escolher o canal de envio
+- consultar o historico de logs
+- acompanhar estados dos jobs
+- validar rapidamente o funcionamento do motor
+
+
+C. RabbitMQ
+
+O RabbitMQ e responsavel por desacoplar o pedido de notificacao do
+processamento real.
+
+Exchange pretendida:
+
+- notification.exchange
+
+Filas pretendidas:
+
+- notification.queue.email
+- notification.queue.sms
+- notification.queue.push
+
+Routing keys pretendidas:
+
+- notification.routing.email
+- notification.routing.sms
+- notification.routing.push
+
+
+D. Motor Backend / Workers
+
+O motor backend processa as mensagens de forma assincrona.
+
+Cada canal deve ter um consumer independente:
+
+- Consumer de E-mail
+- Consumer de SMS
+- Consumer de Push Notification
+
+Cada consumer deve:
+
+- receber a mensagem da sua fila
+- simular ou executar o envio real
+- gravar o log de auditoria
+- atualizar o estado do job
+- disparar callback se existir callbackUrl
+
+
+E. PostgreSQL
+
+O PostgreSQL guarda:
+
+- jobs de notificacao
+- logs de auditoria
+- payloads dinamicos em JSONB
+
+A tabela de logs deve ser particionada por data para manter performance em
+grandes volumes de dados.
+
+O campo JSONB permite guardar informacao especifica por canal sem criar uma
+tabela diferente para cada tipo de notificacao.
+
+Exemplos:
+
+- E-mail: assunto, template, variaveis do corpo
+- SMS: texto curto, pais, operador
+- Push: device_token, title, body, click_action
+
+
+F. Callback / Webhook
+
+O callback fecha o ciclo do pedido.
+
+Quando uma notificacao termina, o sistema deve verificar se o pedido original
+incluia uma callbackUrl.
+
+Se existir, o Notification Center deve enviar um HTTP callback para essa URL
+com o resultado do processamento.
+
+Objetivo do callback:
+
+- avisar o sistema de origem que o envio terminou
+- informar sucesso ou erro
+- evitar que sistemas externos tenham de consultar repetidamente o estado
+
+
+5. VISAO FINAL DO PRODUTO
+
+O Notification Center deve evoluir para uma solucao centralizada, resiliente e
+escalavel para envio de comunicacoes.
+
+Deve ser capaz de:
+
+- receber pedidos de varios sistemas
+- processar grandes volumes sem bloquear o utilizador
+- separar claramente canais de envio
+- manter historico auditavel
+- permitir consulta operacional via Vaadin
+- devolver callbacks em tempo util
+- continuar funcional mesmo com picos de carga
+
+
+6. ESTADO ATUAL VS OBJETIVO
+
+Estado atual:
+
+- Existe uma aplicacao Spring Boot com Vaadin e RabbitMQ.
+- Existem filas para E-mail e SMS.
+- Existe estrutura de jobs e logs.
+- PostgreSQL e RabbitMQ estao em Docker.
+- A tabela notification_logs esta particionada, mas ainda sem particoes-filhas.
+
+Ainda falta para atingir o objetivo completo:
+
+- criar API REST publica
+- adicionar canal Push Notification
+- transportar o jobId real na mensagem
+- atualizar jobs para SUCCESS ou FAILED no consumer
+- criar ou automatizar particoes da tabela de logs
+- implementar callbackUrl/webhooks
+- decidir se a arquitetura sera uma app unica ou duas apps separadas
+- melhorar README e documentacao operacional
+
+
+7. FRASE-RESUMO
+
+O Notification Center Unilabs pretende ser o motor central de comunicacoes da
+empresa, capaz de receber pedidos por API ou Vaadin, distribuir mensagens por
+RabbitMQ, processar E-mail, SMS e Push de forma assincrona, guardar auditoria
+em PostgreSQL particionado e devolver callbacks aos sistemas de origem.
